@@ -250,9 +250,15 @@ let serve = (() => {
         let archive = hyperdrive(function (name) {
           return ram();
         }, key, { sparse: true });
+
         yield promisey.E(archive, 'ready');
 
-        console.log('Added site', hex);
+        var sw = swarm(archive);
+        sw.on('connection', function (peer, type) {
+          console.log('Found swarm peer.');
+        });
+
+        console.log(`Added site dat://${hex}`);
         sites[hex] = hyperdriveHttp(archive);
         try {
           yield promisey.F(pump, socket, archive.replicate(), socket);
@@ -261,6 +267,7 @@ let serve = (() => {
         } finally {
           console.log('Removed site', hex);
           delete sites[hex];
+          sw.close();
         }
       });
 

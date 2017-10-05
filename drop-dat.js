@@ -1,4 +1,3 @@
-
 import hyperdrive from 'hyperdrive'
 import swarm from 'hyperdiscovery'
 import ram from 'random-access-memory'
@@ -105,9 +104,15 @@ async function serve (port) {
     }
     let hex = key.toString('hex')
     let archive = hyperdrive(name => ram(), key, { sparse: true })
+
     await E(archive, 'ready')
 
-    console.log('Added site', hex)
+    var sw = swarm(archive)
+    sw.on('connection', function (peer, type) {
+      console.log('Found swarm peer.')
+    })
+
+    console.log(`Added site dat://${hex}`)
     sites[hex] = hyperdriveHttp(archive)
     try {
       await F(pump, socket, archive.replicate(), socket)
@@ -116,6 +121,7 @@ async function serve (port) {
     } finally {
       console.log('Removed site', hex)
       delete sites[hex]
+      sw.close()
     }
   }
 }
