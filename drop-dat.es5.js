@@ -7,9 +7,13 @@ var hyperdrive = _interopDefault(require('hyperdrive'));
 var swarm = _interopDefault(require('hyperdiscovery'));
 var ram = _interopDefault(require('random-access-memory'));
 var minimist = _interopDefault(require('minimist'));
+var pump = _interopDefault(require('pump'));
+var hyperdriveHttp = _interopDefault(require('hyperdrive-http'));
 var fs = require('fs');
 var path = require('path');
 var promisey = require('promisey');
+var net = require('net');
+var http = require('http');
 
 var asyncGenerator = function () {
   function AwaitValue(value) {
@@ -157,6 +161,8 @@ var asyncToGenerator = function (fn) {
 
 let main = (() => {
   var _ref = asyncToGenerator(function* (argv) {
+    if (argv.serve) return serve(argv.serve);
+
     if (!argv._.length) {
       console.error('Usage: drop-dat files...');
       return process.exit(2);
@@ -177,6 +183,20 @@ let main = (() => {
       console.error(`Adding ${fullPath}...`);
       yield promisey.M(archive, 'writeFile', name, (yield promisey.F(fs.readFile, fullPath)));
     }
+
+    console.error('Uploading to server');
+    if (argv.upload) return upload(archive, argv.upload);
+    console.error('Sharing on P2P network');
+    return share(archive);
+  });
+
+  return function main(_x) {
+    return _ref.apply(this, arguments);
+  };
+})();
+
+let share = (() => {
+  var _ref2 = asyncToGenerator(function* (archive) {
     var sw = swarm(archive);
     sw.on('connection', function (peer, type) {
       console.error('Found swarm peer.');
@@ -189,10 +209,87 @@ let main = (() => {
     process.stdin.resume();
   });
 
-  return function main(_x) {
-    return _ref.apply(this, arguments);
+  return function share(_x2) {
+    return _ref2.apply(this, arguments);
   };
 })();
+
+let upload = (() => {
+  var _ref3 = asyncToGenerator(function* (archive, url) {
+    if (url === true) url = 'localhost';
+    if (typeof url === 'number') url = 'localhost:' + url;
+    let [host, port = DEFAULT_PORT] = url.split(':');
+    let socket = net.connect({ host, port });
+    yield promisey.E(socket, 'connect');
+    console.error('Connected to Server, uploading...');
+    yield promisey.M(socket, 'write', archive.key);
+    console.log(`http://${host}:8080/${archive.key.toString('hex')}/`);
+    yield promisey.F(pump, socket, archive.replicate({ upload: true, live: true }), socket);
+  });
+
+  return function upload(_x3, _x4) {
+    return _ref3.apply(this, arguments);
+  };
+})();
+
+let serve = (() => {
+  var _ref4 = asyncToGenerator(function* (port) {
+    let handleClient = (() => {
+      var _ref5 = asyncToGenerator(function* (socket) {
+        // Read 32 bytes as the key
+        let key;
+        while (true) {
+          key = socket.read(32);
+          if (key) break;
+          yield promisey.E(socket, 'readable');
+        }
+        let hex = key.toString('hex');
+        let archive = hyperdrive(function (name) {
+          return ram();
+        }, key, { sparse: true });
+        yield promisey.E(archive, 'ready');
+        console.log('Added site', hex);
+        sites[hex] = hyperdriveHttp(archive);
+        try {
+          yield promisey.F(pump, socket, archive.replicate({ download: true }), socket);
+        } catch (err) {
+          if (!err.message.match(/premature close/)) throw err;
+        } finally {
+          console.log('Removed site', hex);
+          delete sites[hex];
+        }
+      });
+
+      return function handleClient(_x6) {
+        return _ref5.apply(this, arguments);
+      };
+    })();
+
+    let sites = {};
+    if (typeof port !== 'number') port = DEFAULT_PORT;
+    net.createServer(function (socket) {
+      console.log('CLIENT');
+      handleClient(socket).catch(function (err) {
+        console.error('Error handling client', err.stack);
+      });
+    }).listen(port);
+    console.error(`Dat Gateway Service Listening on tcp port ${port}`);
+
+    http.createServer(function (req, res) {
+      let match = req.url.match(/\/([0-9a-f]{64})\//);
+      let site = match && sites[match[1]];
+      if (!site) return res.writeHead(404);
+      req.url = req.url.replace(match[0], '/');
+      return site(req, res);
+    }).listen(8080);
+  });
+
+  return function serve(_x5) {
+    return _ref4.apply(this, arguments);
+  };
+})();
+
+const DEFAULT_PORT = 3030;
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack);
