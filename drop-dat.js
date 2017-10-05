@@ -6,14 +6,7 @@ const ram = require('random-access-memory')
 const minimist = require('minimist')
 const { readFile } = require('fs')
 const { resolve } = require('path')
-const M = (obj, name, ...args) => new Promise((resolve, reject) =>
-  obj[name](...args, (err, val) => err ? reject(err) : resolve(val)))
-const F = (fn, ...args) => new Promise((resolve, reject) =>
-  fn(...args, (err, val) => err ? reject(err) : resolve(val)))
-const E = (obj, name) => new Promise((resolve, reject) => {
-  obj.once('error', reject)
-  obj.once(name, resolve)
-})
+const { M, E, F } = require('promisey')
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack)

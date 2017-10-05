@@ -1,6 +1,6 @@
 {
   "name": "drop-dat",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A quick file sharing mechanism using dat libraries.",
   "bin": {
     "drop-dat": "drop-dat.js"
@@ -19,6 +19,7 @@
     "hyperdiscovery": "^6.0.4",
     "hyperdrive": "^9.8.2",
     "minimist": "^1.2.0",
+    "promisey": "^1.0.0",
     "random-access-memory": "^2.4.0"
   }
 }
