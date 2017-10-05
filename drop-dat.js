@@ -5,8 +5,8 @@ import minimist from 'minimist'
 import pump from 'pump'
 import hyperdriveHttp from 'hyperdrive-http'
 import websocket from 'websocket-stream'
-import { readFile } from 'fs'
-import { resolve } from 'path'
+import { readFile, stat, readdir } from 'fs'
+import { resolve, join } from 'path'
 import { M, E, F } from 'promisey'
 import { createServer } from 'http'
 
@@ -32,15 +32,26 @@ async function main (argv) {
   // Wait for it to be ready
   await E(archive, 'ready')
 
-  // Add some files to it.
-  console.error('Importing file(s)...')
-  for (let name of argv._) {
-    let fullPath = resolve(process.cwd(), name)
-    console.error(`Adding ${fullPath}...`)
-    await M(archive, 'writeFile', name, await F(readFile, fullPath))
+  console.error('Importing file(s):')
+  let cwd = process.cwd()
+  await importList('.', argv._)
+
+  async function importList (base, names) {
+    for (let name of names) {
+      let path = join(base, name)
+      let fullPath = resolve(cwd, path)
+      let meta = await F(stat, fullPath)
+      if (meta.isDirectory()) {
+        let children = await F(readdir, fullPath)
+        await importList(path, children.filter(name => name[0] !== '.'))
+      }
+      if (meta.isFile()) {
+        console.error(`  ${path}`)
+        await M(archive, 'writeFile', path, await F(readFile, fullPath))
+      }
+    }
   }
 
-  console.error('Uploading to server')
   if (argv.upload) return upload(archive, argv.upload)
   console.error('Sharing on P2P network')
   return share(archive)
@@ -107,11 +118,6 @@ async function serve (port) {
 
     await E(archive, 'ready')
 
-    var sw = swarm(archive)
-    sw.on('connection', function (peer, type) {
-      console.log('Found swarm peer.')
-    })
-
     console.log(`Added site dat://${hex}`)
     sites[hex] = hyperdriveHttp(archive)
     try {
@@ -121,7 +127,6 @@ async function serve (port) {
     } finally {
       console.log('Removed site', hex)
       delete sites[hex]
-      sw.close()
     }
   }
 }

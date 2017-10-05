@@ -161,6 +161,30 @@ var asyncToGenerator = function (fn) {
 
 let main = (() => {
   var _ref = asyncToGenerator(function* (argv) {
+    let importList = (() => {
+      var _ref2 = asyncToGenerator(function* (base, names) {
+        for (let name of names) {
+          let path$$1 = path.join(base, name);
+          let fullPath = path.resolve(cwd, path$$1);
+          let meta = yield promisey.F(fs.stat, fullPath);
+          if (meta.isDirectory()) {
+            let children = yield promisey.F(fs.readdir, fullPath);
+            yield importList(path$$1, children.filter(function (name) {
+              return name[0] !== '.';
+            }));
+          }
+          if (meta.isFile()) {
+            console.error(`  ${path$$1}`);
+            yield promisey.M(archive, 'writeFile', path$$1, (yield promisey.F(fs.readFile, fullPath)));
+          }
+        }
+      });
+
+      return function importList(_x2, _x3) {
+        return _ref2.apply(this, arguments);
+      };
+    })();
+
     // Run a server if the `--serve` option is given
     if (argv.serve) return serve(argv.serve === true ? DEFAULT_PORT : argv.serve);
 
@@ -177,15 +201,10 @@ let main = (() => {
     // Wait for it to be ready
     yield promisey.E(archive, 'ready');
 
-    // Add some files to it.
-    console.error('Importing file(s)...');
-    for (let name of argv._) {
-      let fullPath = path.resolve(process.cwd(), name);
-      console.error(`Adding ${fullPath}...`);
-      yield promisey.M(archive, 'writeFile', name, (yield promisey.F(fs.readFile, fullPath)));
-    }
+    console.error('Importing file(s):');
+    let cwd = process.cwd();
+    yield importList('.', argv._);
 
-    console.error('Uploading to server');
     if (argv.upload) return upload(archive, argv.upload);
     console.error('Sharing on P2P network');
     return share(archive);
@@ -197,7 +216,7 @@ let main = (() => {
 })();
 
 let share = (() => {
-  var _ref2 = asyncToGenerator(function* (archive) {
+  var _ref3 = asyncToGenerator(function* (archive) {
     var sw = swarm(archive);
     sw.on('connection', function (peer, type) {
       console.error('Found swarm peer.');
@@ -210,13 +229,13 @@ let share = (() => {
     process.stdin.resume();
   });
 
-  return function share(_x2) {
-    return _ref2.apply(this, arguments);
+  return function share(_x4) {
+    return _ref3.apply(this, arguments);
   };
 })();
 
 let upload = (() => {
-  var _ref3 = asyncToGenerator(function* (archive, url) {
+  var _ref4 = asyncToGenerator(function* (archive, url) {
     if (url === true) url = 'localhost';
     if (typeof url === 'number') url = 'localhost:' + url;
     let [host, port = DEFAULT_PORT] = url.split(':');
@@ -231,15 +250,15 @@ let upload = (() => {
     yield promisey.F(pump, socket, archive.replicate({ upload: true, live: true }), socket);
   });
 
-  return function upload(_x3, _x4) {
-    return _ref3.apply(this, arguments);
+  return function upload(_x5, _x6) {
+    return _ref4.apply(this, arguments);
   };
 })();
 
 let serve = (() => {
-  var _ref4 = asyncToGenerator(function* (port) {
+  var _ref5 = asyncToGenerator(function* (port) {
     let handleClient = (() => {
-      var _ref5 = asyncToGenerator(function* (socket) {
+      var _ref6 = asyncToGenerator(function* (socket) {
         let key;
         while (true) {
           key = socket.read(32);
@@ -253,11 +272,6 @@ let serve = (() => {
 
         yield promisey.E(archive, 'ready');
 
-        var sw = swarm(archive);
-        sw.on('connection', function (peer, type) {
-          console.log('Found swarm peer.');
-        });
-
         console.log(`Added site dat://${hex}`);
         sites[hex] = hyperdriveHttp(archive);
         try {
@@ -267,12 +281,11 @@ let serve = (() => {
         } finally {
           console.log('Removed site', hex);
           delete sites[hex];
-          sw.close();
         }
       });
 
-      return function handleClient(_x6) {
-        return _ref5.apply(this, arguments);
+      return function handleClient(_x8) {
+        return _ref6.apply(this, arguments);
       };
     })();
 
@@ -297,8 +310,8 @@ let serve = (() => {
     console.log(`Upload interface at ws://localhost:${port}/`);
   });
 
-  return function serve(_x5) {
-    return _ref4.apply(this, arguments);
+  return function serve(_x7) {
+    return _ref5.apply(this, arguments);
   };
 })();
 
