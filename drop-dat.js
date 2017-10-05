@@ -1,12 +1,11 @@
-#!/usr/bin/env node
 
-const hyperdrive = require('hyperdrive')
-const swarm = require('hyperdiscovery')
-const ram = require('random-access-memory')
-const minimist = require('minimist')
-const { readFile } = require('fs')
-const { resolve } = require('path')
-const { M, E, F } = require('promisey')
+import hyperdrive from 'hyperdrive'
+import swarm from 'hyperdiscovery'
+import ram from 'random-access-memory'
+import minimist from 'minimist'
+import { readFile } from 'fs'
+import { resolve } from 'path'
+import { M, E, F } from 'promisey'
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack)
