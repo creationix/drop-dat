@@ -171,20 +171,21 @@ let main = (() => {
     yield promisey.E(archive, 'ready');
 
     // Add some files to it.
-    console.log('Importing file(s)...');
+    console.error('Importing file(s)...');
     for (let name of argv._) {
       let fullPath = path.resolve(process.cwd(), name);
-      console.log(`Adding ${fullPath}...`);
+      console.error(`Adding ${fullPath}...`);
       yield promisey.M(archive, 'writeFile', name, (yield promisey.F(fs.readFile, fullPath)));
     }
     var sw = swarm(archive);
     sw.on('connection', function (peer, type) {
-      console.log('Found swarm peer', peer, type);
+      console.error('Found swarm peer.');
     });
-    console.log(`Ready to share: dat://${archive.key.toString('hex')}`);
+    console.error('Sharing on dat P2P network...');
+    console.error('Press Control+C to stop sharing.\n');
+    console.log(`dat://${archive.key.toString('hex')}`);
 
     // Keep the event loop alive forever.
-    console.log('Press Control+C to stop sharing');
     process.stdin.resume();
   });
 

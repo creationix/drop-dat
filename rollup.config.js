@@ -12,5 +12,14 @@ export default {
       exclude: 'node_modules/**'
     }),
     shebang()
+  ],
+  external: [
+    'hyperdiscovery',
+    'hyperdrive',
+    'minimist',
+    'promisey',
+    'random-access-memory',
+    'fs',
+    'path'
   ]
 }
