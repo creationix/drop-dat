@@ -1,6 +1,6 @@
 {
   "name": "drop-dat",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "A quick file sharing mechanism using dat libraries.",
   "bin": {
     "drop-dat": "drop-dat.es5.js"
