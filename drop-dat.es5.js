@@ -9,10 +9,10 @@ var ram = _interopDefault(require('random-access-memory'));
 var minimist = _interopDefault(require('minimist'));
 var pump = _interopDefault(require('pump'));
 var hyperdriveHttp = _interopDefault(require('hyperdrive-http'));
+var websocket = _interopDefault(require('websocket-stream'));
 var fs = require('fs');
 var path = require('path');
 var promisey = require('promisey');
-var net = require('net');
 var http = require('http');
 
 var asyncGenerator = function () {
@@ -161,7 +161,8 @@ var asyncToGenerator = function (fn) {
 
 let main = (() => {
   var _ref = asyncToGenerator(function* (argv) {
-    if (argv.serve) return serve(argv.serve);
+    // Run a server if the `--serve` option is given
+    if (argv.serve) return serve(argv.serve === true ? DEFAULT_PORT : argv.serve);
 
     if (!argv._.length) {
       console.error('Usage: drop-dat files...');
@@ -218,12 +219,15 @@ let upload = (() => {
   var _ref3 = asyncToGenerator(function* (archive, url) {
     if (url === true) url = 'localhost';
     if (typeof url === 'number') url = 'localhost:' + url;
-    let [host, port = DEFAULT_UPLOAD_PORT] = url.split(':');
-    let socket = net.connect({ host, port });
+    let [host, port = DEFAULT_PORT] = url.split(':');
+    let socket = websocket(`ws://${host}:${port}/`);
     yield promisey.E(socket, 'connect');
     console.error('Connected to Server, uploading...');
     yield promisey.M(socket, 'write', archive.key);
-    console.log(`http://${host}:${DEFAULT_HTTP_PORT}/${archive.key.toString('hex')}/`);
+    console.log(`http://${host}:${port}/${archive.key.toString('hex')}/`);
+    archive.content.on('upload', function (index) {
+      console.log('Upload', index);
+    });
     yield promisey.F(pump, socket, archive.replicate({ upload: true, live: true }), socket);
   });
 
@@ -236,7 +240,6 @@ let serve = (() => {
   var _ref4 = asyncToGenerator(function* (port) {
     let handleClient = (() => {
       var _ref5 = asyncToGenerator(function* (socket) {
-        // Read 32 bytes as the key
         let key;
         while (true) {
           key = socket.read(32);
@@ -248,10 +251,11 @@ let serve = (() => {
           return ram();
         }, key, { sparse: true });
         yield promisey.E(archive, 'ready');
+
         console.log('Added site', hex);
         sites[hex] = hyperdriveHttp(archive);
         try {
-          yield promisey.F(pump, socket, archive.replicate({ download: true }), socket);
+          yield promisey.F(pump, socket, archive.replicate(), socket);
         } catch (err) {
           if (!err.message.match(/premature close/)) throw err;
         } finally {
@@ -266,22 +270,24 @@ let serve = (() => {
     })();
 
     let sites = {};
-    if (typeof port !== 'number') port = DEFAULT_UPLOAD_PORT;
-    net.createServer(function (socket) {
-      console.log('CLIENT');
-      handleClient(socket).catch(function (err) {
-        console.error('Error handling client', err.stack);
-      });
-    }).listen(port);
-    console.error(`Dat Gateway Service Listening on tcp port ${port}`);
 
-    http.createServer(function (req, res) {
+    let server = http.createServer(function (req, res) {
+      // See if the request matches
       let match = req.url.match(/\/([0-9a-f]{64})\//);
       let site = match && sites[match[1]];
       if (!site) return res.writeHead(404);
       req.url = req.url.replace(match[0], '/');
       return site(req, res);
-    }).listen(DEFAULT_HTTP_PORT);
+    }).listen(port);
+
+    websocket.createServer({ server }, function (stream) {
+      handleClient(stream).catch(function (err) {
+        console.error(err.stack);
+      });
+    });
+
+    console.log(`Proxy Server running at http://localhost:${port}/:key/`);
+    console.log(`Upload interface at ws://localhost:${port}/`);
   });
 
   return function serve(_x5) {
@@ -289,8 +295,7 @@ let serve = (() => {
   };
 })();
 
-const DEFAULT_UPLOAD_PORT = parseInt(process.env.DROP_DAT_UPLOAD_PORT || '0') || 8041;
-const DEFAULT_HTTP_PORT = parseInt(process.env.DROP_DAT_HTTP_PORT || '0') || 8040;
+const DEFAULT_PORT = parseInt(process.env.PORT || '0') || 8040;
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack);

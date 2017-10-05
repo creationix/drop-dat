@@ -5,14 +5,13 @@ import ram from 'random-access-memory'
 import minimist from 'minimist'
 import pump from 'pump'
 import hyperdriveHttp from 'hyperdrive-http'
+import websocket from 'websocket-stream'
 import { readFile } from 'fs'
 import { resolve } from 'path'
 import { M, E, F } from 'promisey'
-import { createServer as createNetServer, connect } from 'net'
 import { createServer } from 'http'
 
-const DEFAULT_UPLOAD_PORT = parseInt(process.env.DROP_DAT_UPLOAD_PORT || '0') || 8041
-const DEFAULT_HTTP_PORT = parseInt(process.env.DROP_DAT_HTTP_PORT || '0') || 8040
+const DEFAULT_PORT = parseInt(process.env.PORT || '0') || 8040
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack)
@@ -20,7 +19,8 @@ main(minimist(process.argv.slice(2))).catch(err => {
 })
 
 async function main (argv) {
-  if (argv.serve) return serve(argv.serve)
+  // Run a server if the `--serve` option is given
+  if (argv.serve) return serve(argv.serve === true ? DEFAULT_PORT : argv.serve)
 
   if (!argv._.length) {
     console.error('Usage: drop-dat files...')
@@ -63,36 +63,40 @@ async function share (archive) {
 async function upload (archive, url) {
   if (url === true) url = 'localhost'
   if (typeof url === 'number') url = 'localhost:' + url
-  let [host, port = DEFAULT_UPLOAD_PORT] = url.split(':')
-  let socket = connect({host, port})
+  let [host, port = DEFAULT_PORT] = url.split(':')
+  let socket = websocket(`ws://${host}:${port}/`)
   await E(socket, 'connect')
   console.error('Connected to Server, uploading...')
   await M(socket, 'write', archive.key)
-  console.log(`http://${host}:${DEFAULT_HTTP_PORT}/${archive.key.toString('hex')}/`)
+  console.log(`http://${host}:${port}/${archive.key.toString('hex')}/`)
+  archive.content.on('upload', index => {
+    console.log('Upload', index)
+  })
   await F(pump, socket, archive.replicate({ upload: true, live: true }), socket)
 }
 
 async function serve (port) {
   let sites = {}
-  if (typeof port !== 'number') port = DEFAULT_UPLOAD_PORT
-  createNetServer(socket => {
-    console.log('CLIENT')
-    handleClient(socket).catch(err => {
-      console.error('Error handling client', err.stack)
-    })
-  }).listen(port)
-  console.error(`Dat Gateway Service Listening on tcp port ${port}`)
 
-  createServer((req, res) => {
+  let server = createServer((req, res) => {
+    // See if the request matches
     let match = req.url.match(/\/([0-9a-f]{64})\//)
     let site = match && sites[match[1]]
     if (!site) return res.writeHead(404)
     req.url = req.url.replace(match[0], '/')
     return site(req, res)
-  }).listen(DEFAULT_HTTP_PORT)
+  }).listen(port)
+
+  websocket.createServer({server}, stream => {
+    handleClient(stream).catch(err => {
+      console.error(err.stack)
+    })
+  })
+
+  console.log(`Proxy Server running at http://localhost:${port}/:key/`)
+  console.log(`Upload interface at ws://localhost:${port}/`)
 
   async function handleClient (socket) {
-    // Read 32 bytes as the key
     let key
     while (true) {
       key = socket.read(32)
@@ -102,10 +106,11 @@ async function serve (port) {
     let hex = key.toString('hex')
     let archive = hyperdrive(name => ram(), key, { sparse: true })
     await E(archive, 'ready')
+
     console.log('Added site', hex)
     sites[hex] = hyperdriveHttp(archive)
     try {
-      await F(pump, socket, archive.replicate({download: true}), socket)
+      await F(pump, socket, archive.replicate(), socket)
     } catch (err) {
       if (!err.message.match(/premature close/)) throw err
     } finally {
