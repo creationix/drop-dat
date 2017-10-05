@@ -1,0 +1,24 @@
+{
+  "name": "drop-dat",
+  "version": "1.0.0",
+  "description": "A quick file sharing mechanism using dat libraries.",
+  "bin": {
+    "drop-dat": "drop-dat.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creationix/drop-dat.git"
+  },
+  "author": "Tim Caswell <tim@creationix.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/creationix/drop-dat/issues"
+  },
+  "homepage": "https://github.com/creationix/drop-dat#readme",
+  "dependencies": {
+    "hyperdiscovery": "^6.0.4",
+    "hyperdrive": "^9.8.2",
+    "minimist": "^1.2.0",
+    "random-access-memory": "^2.4.0"
+  }
+}
