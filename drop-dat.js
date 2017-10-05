@@ -11,7 +11,8 @@ import { M, E, F } from 'promisey'
 import { createServer as createNetServer, connect } from 'net'
 import { createServer } from 'http'
 
-const DEFAULT_PORT = 3030
+const DEFAULT_UPLOAD_PORT = parseInt(process.env.DROP_DAT_UPLOAD_PORT || '0') || 8041
+const DEFAULT_HTTP_PORT = parseInt(process.env.DROP_DAT_HTTP_PORT || '0') || 8040
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack)
@@ -62,18 +63,18 @@ async function share (archive) {
 async function upload (archive, url) {
   if (url === true) url = 'localhost'
   if (typeof url === 'number') url = 'localhost:' + url
-  let [host, port = DEFAULT_PORT] = url.split(':')
+  let [host, port = DEFAULT_UPLOAD_PORT] = url.split(':')
   let socket = connect({host, port})
   await E(socket, 'connect')
   console.error('Connected to Server, uploading...')
   await M(socket, 'write', archive.key)
-  console.log(`http://${host}:8080/${archive.key.toString('hex')}/`)
+  console.log(`http://${host}:${DEFAULT_HTTP_PORT}/${archive.key.toString('hex')}/`)
   await F(pump, socket, archive.replicate({ upload: true, live: true }), socket)
 }
 
 async function serve (port) {
   let sites = {}
-  if (typeof port !== 'number') port = DEFAULT_PORT
+  if (typeof port !== 'number') port = DEFAULT_UPLOAD_PORT
   createNetServer(socket => {
     console.log('CLIENT')
     handleClient(socket).catch(err => {
@@ -88,7 +89,7 @@ async function serve (port) {
     if (!site) return res.writeHead(404)
     req.url = req.url.replace(match[0], '/')
     return site(req, res)
-  }).listen(8080)
+  }).listen(DEFAULT_HTTP_PORT)
 
   async function handleClient (socket) {
     // Read 32 bytes as the key

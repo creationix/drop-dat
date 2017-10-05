@@ -218,12 +218,12 @@ let upload = (() => {
   var _ref3 = asyncToGenerator(function* (archive, url) {
     if (url === true) url = 'localhost';
     if (typeof url === 'number') url = 'localhost:' + url;
-    let [host, port = DEFAULT_PORT] = url.split(':');
+    let [host, port = DEFAULT_UPLOAD_PORT] = url.split(':');
     let socket = net.connect({ host, port });
     yield promisey.E(socket, 'connect');
     console.error('Connected to Server, uploading...');
     yield promisey.M(socket, 'write', archive.key);
-    console.log(`http://${host}:8080/${archive.key.toString('hex')}/`);
+    console.log(`http://${host}:${DEFAULT_HTTP_PORT}/${archive.key.toString('hex')}/`);
     yield promisey.F(pump, socket, archive.replicate({ upload: true, live: true }), socket);
   });
 
@@ -266,7 +266,7 @@ let serve = (() => {
     })();
 
     let sites = {};
-    if (typeof port !== 'number') port = DEFAULT_PORT;
+    if (typeof port !== 'number') port = DEFAULT_UPLOAD_PORT;
     net.createServer(function (socket) {
       console.log('CLIENT');
       handleClient(socket).catch(function (err) {
@@ -281,7 +281,7 @@ let serve = (() => {
       if (!site) return res.writeHead(404);
       req.url = req.url.replace(match[0], '/');
       return site(req, res);
-    }).listen(8080);
+    }).listen(DEFAULT_HTTP_PORT);
   });
 
   return function serve(_x5) {
@@ -289,7 +289,8 @@ let serve = (() => {
   };
 })();
 
-const DEFAULT_PORT = 3030;
+const DEFAULT_UPLOAD_PORT = parseInt(process.env.DROP_DAT_UPLOAD_PORT || '0') || 8041;
+const DEFAULT_HTTP_PORT = parseInt(process.env.DROP_DAT_HTTP_PORT || '0') || 8040;
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack);
