@@ -186,7 +186,7 @@ let main = (() => {
     })();
 
     // Run a server if the `--serve` option is given
-    if (argv.serve) return serve(argv.serve === true ? DEFAULT_PORT : argv.serve);
+    if (argv.serve) return serve(argv.serve);
 
     if (!argv._.length) {
       console.error('Usage: drop-dat files...');
@@ -238,7 +238,7 @@ let upload = (() => {
   var _ref4 = asyncToGenerator(function* (archive, url) {
     if (url === true) url = 'localhost';
     if (typeof url === 'number') url = 'localhost:' + url;
-    let [host, port = DEFAULT_PORT] = url.split(':');
+    let { host, port } = parseUrl(url);
     let socket = websocket(`ws://${host}:${port}/`);
     yield promisey.E(socket, 'connect');
     console.error('Connected to Server, uploading...');
@@ -256,7 +256,7 @@ let upload = (() => {
 })();
 
 let serve = (() => {
-  var _ref5 = asyncToGenerator(function* (port) {
+  var _ref5 = asyncToGenerator(function* (url) {
     let handleClient = (() => {
       var _ref6 = asyncToGenerator(function* (socket) {
         let key;
@@ -273,7 +273,11 @@ let serve = (() => {
         yield promisey.E(archive, 'ready');
 
         console.log(`Added site dat://${hex}`);
-        sites[hex] = hyperdriveHttp(archive);
+        sites[hex] = hyperdriveHttp(archive, {
+          exposeHeaders: true,
+          live: true,
+          footer: `Served by Drop-Dat`
+        });
         try {
           yield promisey.F(pump, socket, archive.replicate(), socket);
         } catch (err) {
@@ -289,6 +293,7 @@ let serve = (() => {
       };
     })();
 
+    let { host, port } = parseUrl(url);
     let sites = {};
 
     let server = http.createServer(function (req, res) {
@@ -298,7 +303,7 @@ let serve = (() => {
       if (!site) return res.writeHead(404);
       req.url = req.url.replace(match[0], '/');
       return site(req, res);
-    }).listen(port);
+    }).listen({ host, port });
 
     websocket.createServer({ server }, function (stream) {
       handleClient(stream).catch(function (err) {
@@ -315,9 +320,35 @@ let serve = (() => {
   };
 })();
 
-const DEFAULT_PORT = parseInt(process.env.PORT || '0') || 8040;
+const PORT = parseInt(process.env.PORT || '0') || 8040;
+const HOST = process.env.HOST || 'localhost';
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack);
   return process.exit(1);
 });
+
+function parseUrl(url) {
+  let host, port;
+  console.log('PARSE', { url });
+  if (url === true) {
+    host = HOST;
+    port = PORT;
+  } else {
+    let match = url.match(/^(.*):([0-9]*)$/);
+    if (match) {
+      host = match[1] || HOST;
+      port = parseInt(match[2] || '0', 10) || PORT;
+    } else {
+      match = url.match(/^[0-9]+$/);
+      if (match) {
+        host = HOST;
+        port = parseInt(match[0], 10);
+      } else {
+        host = url || HOST;
+        port = PORT;
+      }
+    }
+  }
+  return { host, port };
+}

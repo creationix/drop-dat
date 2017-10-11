@@ -10,16 +10,42 @@ import { resolve, join } from 'path'
 import { M, E, F } from 'promisey'
 import { createServer } from 'http'
 
-const DEFAULT_PORT = parseInt(process.env.PORT || '0') || 8040
+const PORT = parseInt(process.env.PORT || '0') || 8040
+const HOST = process.env.HOST || 'localhost'
 
 main(minimist(process.argv.slice(2))).catch(err => {
   console.error(err.stack)
   return process.exit(1)
 })
 
+function parseUrl (url) {
+  let host, port
+  console.log('PARSE', {url})
+  if (url === true) {
+    host = HOST
+    port = PORT
+  } else {
+    let match = url.match(/^(.*):([0-9]*)$/)
+    if (match) {
+      host = match[1] || HOST
+      port = parseInt(match[2] || '0', 10) || PORT
+    } else {
+      match = url.match(/^[0-9]+$/)
+      if (match) {
+        host = HOST
+        port = parseInt(match[0], 10)
+      } else {
+        host = url || HOST
+        port = PORT
+      }
+    }
+  }
+  return { host, port }
+}
+
 async function main (argv) {
   // Run a server if the `--serve` option is given
-  if (argv.serve) return serve(argv.serve === true ? DEFAULT_PORT : argv.serve)
+  if (argv.serve) return serve(argv.serve)
 
   if (!argv._.length) {
     console.error('Usage: drop-dat files...')
@@ -73,7 +99,7 @@ async function share (archive) {
 async function upload (archive, url) {
   if (url === true) url = 'localhost'
   if (typeof url === 'number') url = 'localhost:' + url
-  let [host, port = DEFAULT_PORT] = url.split(':')
+  let { host, port } = parseUrl(url)
   let socket = websocket(`ws://${host}:${port}/`)
   await E(socket, 'connect')
   console.error('Connected to Server, uploading...')
@@ -85,7 +111,8 @@ async function upload (archive, url) {
   await F(pump, socket, archive.replicate({ upload: true, live: true }), socket)
 }
 
-async function serve (port) {
+async function serve (url) {
+  let { host, port } = parseUrl(url)
   let sites = {}
 
   let server = createServer((req, res) => {
@@ -95,7 +122,7 @@ async function serve (port) {
     if (!site) return res.writeHead(404)
     req.url = req.url.replace(match[0], '/')
     return site(req, res)
-  }).listen(port)
+  }).listen({host, port})
 
   websocket.createServer({server}, stream => {
     handleClient(stream).catch(err => {
@@ -119,7 +146,11 @@ async function serve (port) {
     await E(archive, 'ready')
 
     console.log(`Added site dat://${hex}`)
-    sites[hex] = hyperdriveHttp(archive)
+    sites[hex] = hyperdriveHttp(archive, {
+      exposeHeaders: true,
+      live: true,
+      footer: `Served by Drop-Dat`
+    })
     try {
       await F(pump, socket, archive.replicate(), socket)
     } catch (err) {
