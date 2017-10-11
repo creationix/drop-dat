@@ -5,7 +5,7 @@ import minimist from 'minimist'
 import pump from 'pump'
 import hyperdriveHttp from 'hyperdrive-http'
 import websocket from 'websocket-stream'
-import { readFile, stat, readdir } from 'fs'
+import { readFile, stat, readdir, createReadStream } from 'fs'
 import { resolve, join } from 'path'
 import { M, E, F } from 'promisey'
 import { createServer } from 'http'
@@ -21,9 +21,11 @@ async function main (argv) {
   // Run a server if the `--serve` option is given
   if (argv.serve) return serve(argv.serve === true ? DEFAULT_PORT : argv.serve)
 
-  if (!argv._.length) {
-    console.error('Usage: drop-dat files...')
-    return process.exit(2)
+  if (!argv._.length || argv.h || argv.help) {
+    var stream = createReadStream(join(__dirname, 'USAGE'))
+    stream.pipe(process.stdout)
+    stream.on('end', () => { process.exit(2) })
+    return
   }
 
   // Create a new in-memory hyperdrive

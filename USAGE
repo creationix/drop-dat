@@ -1,0 +1,14 @@
+USAGE: drop-dat FILE-1 FILE-2 ...
+
+  Share a set of files as a dat.
+  
+  --serve
+  
+    Runs an HTTP server that dats can be uploaded to and served.
+
+
+  --upload http://DESTINATION:PORT
+  
+    Sends the files over HTTP to a destination that is running
+    `drop-dat --serve`, to be served publicly.
+

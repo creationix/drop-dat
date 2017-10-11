@@ -188,9 +188,13 @@ let main = (() => {
     // Run a server if the `--serve` option is given
     if (argv.serve) return serve(argv.serve === true ? DEFAULT_PORT : argv.serve);
 
-    if (!argv._.length) {
-      console.error('Usage: drop-dat files...');
-      return process.exit(2);
+    if (!argv._.length || argv.h || argv.help) {
+      var stream = fs.createReadStream(path.join(__dirname, 'USAGE'));
+      stream.pipe(process.stdout);
+      stream.on('end', function () {
+        process.exit(2);
+      });
+      return;
     }
 
     // Create a new in-memory hyperdrive
